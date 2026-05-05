@@ -4,16 +4,15 @@ from copy import deepcopy
 from unittest.mock import AsyncMock
 
 from aiohttp import ClientError
-from freezegun.api import FrozenDateTimeFactory
 from pydrawise.schema import Controller, User, Zone
 
-from homeassistant.components.hydrawise.const import DOMAIN, MAIN_SCAN_INTERVAL
+from homeassistant.components.hydrawise.const import DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceRegistry
 
-from tests.common import MockConfigEntry, async_fire_time_changed
+from tests.common import MockConfigEntry
 
 
 async def test_connect_retry(
@@ -48,7 +47,6 @@ async def test_auto_add_devices(
     user: User,
     controller: Controller,
     zones: list[Zone],
-    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test new devices are auto-added to the device registry."""
     device = device_registry.async_get_device(
@@ -79,9 +77,8 @@ async def test_auto_add_devices(
     user.controllers = [controller, controller2]
     mock_pydrawise.get_zones.side_effect = [zones, zones2]
 
-    # Make the coordinator refresh data.
-    freezer.tick(MAIN_SCAN_INTERVAL)
-    async_fire_time_changed(hass)
+    # Force refresh directly so the new entities are added before the assertions below.
+    await mock_added_config_entry.runtime_data.main.async_refresh()
     await hass.async_block_till_done(wait_background_tasks=True)
 
     new_controller_device = device_registry.async_get_device(
@@ -108,7 +105,6 @@ async def test_auto_remove_devices(
     user: User,
     controller: Controller,
     zones: list[Zone],
-    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test old devices are auto-removed from the device registry."""
     assert (
@@ -120,9 +116,8 @@ async def test_auto_remove_devices(
         assert device is not None
 
     user.controllers = []
-    # Make the coordinator refresh data.
-    freezer.tick(MAIN_SCAN_INTERVAL)
-    async_fire_time_changed(hass)
+    # Force refresh directly so the entities are fully removed before the assertions below.
+    await mock_added_config_entry.runtime_data.main.async_refresh()
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert (
